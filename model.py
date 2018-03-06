@@ -166,6 +166,7 @@ class DCGAN(object):
         [self.z_sum, self.d_sum, self.d_loss_real_sum, self.d_loss_sum])
     self.writer = SummaryWriter("./logs", self.sess.graph)
 
+		# The Z distribuion sample
     sample_z = np.random.uniform(-1, 1, size=(self.sample_num , self.z_dim))
 
     if config.dataset == 'mnist':
@@ -299,19 +300,19 @@ class DCGAN(object):
                   './{}/train_{:02d}_{:04d}.png'.format(config.sample_dir, epoch, idx))
             print("[Sample] d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss))
           else:
-            # try:
-            samples, d_loss, g_loss = self.sess.run(
-              [self.sampler, self.d_loss, self.g_loss],
-              feed_dict={
-                  self.z: sample_z,
-                  self.inputs: sample_inputs,
-              },
-            )
-            save_images(samples, image_manifold_size(samples.shape[0]),
-                  './{}/train_{:02d}_{:04d}.png'.format(config.sample_dir, epoch, idx))
-            print("[Sample] d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss))
-            # except Exception as e:
-            #   print("one pic error!...")
+            try:
+              samples, d_loss, g_loss = self.sess.run(
+                [self.sampler, self.d_loss, self.g_loss],
+                feed_dict={
+                    self.z: sample_z,
+                    self.inputs: sample_inputs,
+                },
+              )
+              save_images(samples, image_manifold_size(samples.shape[0]),
+                    './results/{}/train_{:02d}_{:04d}.png'.format(config.sample_dir, epoch, idx))
+              print("[Sample] d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss))
+            except Exception as e:
+              print("one pic error!...")
 
         if np.mod(counter, 500) == 2:
           self.save(config.checkpoint_dir, counter)

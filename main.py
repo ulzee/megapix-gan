@@ -7,14 +7,14 @@ from utils import pp, visualize, to_json, show_all_variables
 
 import tensorflow as tf
 
-imsize = 64
+imsize = 32
 flags = tf.app.flags
 flags.DEFINE_integer("epoch", 50, "Epoch to train [25]")
 flags.DEFINE_float("learning_rate", 0.0002, "Learning rate of for adam [0.0002]")
 flags.DEFINE_float("beta1", 0.5, "Momentum term of adam [0.5]")
 flags.DEFINE_integer("train_size", np.inf, "The size of train images [np.inf]")
 # flags.DEFINE_integer("batch_size", 64, "The size of batch images [64]")
-flags.DEFINE_integer("batch_size", imsize, "The size of batch images [64]")
+flags.DEFINE_integer("batch_size", 64, "The size of batch images [64]")
 flags.DEFINE_integer("input_height", imsize, "The size of image to use (will be center cropped). [108]")
 flags.DEFINE_integer("input_width", None, "The size of image to use (will be center cropped). If None, same value as input_height [None]")
 flags.DEFINE_integer("output_height", imsize, "The size of the output images to produce [64]")
@@ -30,8 +30,14 @@ flags.DEFINE_boolean("crop", False, "True for training, False for testing [False
 flags.DEFINE_boolean("visualize", False, "True for visualizing, False for nothing [False]")
 # flags.DEFINE_integer("generate_test_images", 100, "Number of images to generate during test. [100]")
 # flags.DEFINE_integer("generate_test_images", 10, "Number of images to generate during test. [100]")
-flags.DEFINE_integer("generate_test_images", 100, "Number of images to generate during test. [100]")
+flags.DEFINE_integer("z_dim", 100, "Inner dimension of Z space.")
+flags.DEFINE_integer("gf_dim", 256, "Richness of FC layer over Z")
+flags.DEFINE_integer("stacks", 4, "# of layers between FC over Z and output layer")
 FLAGS = flags.FLAGS
+
+assert int(FLAGS.sample_num**0.5)**2 == FLAGS.sample_num
+assert 2**(FLAGS.stacks+3) > imsize
+assert 2**(FLAGS.stacks+3) < FLAGS.gf_dim
 
 def main(_):
 	pp.pprint(flags.FLAGS.__flags)
@@ -43,12 +49,14 @@ def main(_):
 
 	if not os.path.exists(FLAGS.checkpoint_dir):
 		os.makedirs(FLAGS.checkpoint_dir)
-	if not os.path.exists(FLAGS.sample_dir):
-		os.makedirs(FLAGS.sample_dir)
+	if not os.path.exists('results/%s' % FLAGS.sample_dir):
+		os.makedirs('results/%s' % FLAGS.sample_dir)
 
 	#gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.333)
 	run_config = tf.ConfigProto()
 	run_config.gpu_options.allow_growth=True
+
+	num_stacks = int(np.log2(imsize)) - 3
 
 	with tf.Session(config=run_config) as sess:
 		dcgan = DCGAN(
@@ -59,13 +67,15 @@ def main(_):
 			output_height=FLAGS.output_height,
 			batch_size=FLAGS.batch_size,
 			sample_num=FLAGS.sample_num,
-			z_dim=FLAGS.generate_test_images,
+			z_dim=FLAGS.z_dim,
+			gf_dim=FLAGS.gf_dim,
 			dataset_name=FLAGS.dataset,
 			input_fname_pattern=FLAGS.input_fname_pattern,
 			crop=FLAGS.crop,
 			checkpoint_dir=FLAGS.checkpoint_dir,
 			sample_dir=FLAGS.sample_dir,
-			c_dim=1)
+			c_dim=1,
+			stacks=num_stacks)
 
 		show_all_variables()
 

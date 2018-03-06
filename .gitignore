@@ -4,6 +4,7 @@ samples
 *.zip
 logs
 test*
+tissue*
 
 web/js/gen_layers.js
 

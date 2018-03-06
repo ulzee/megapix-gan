@@ -56,8 +56,6 @@ def main(_):
 	run_config = tf.ConfigProto()
 	run_config.gpu_options.allow_growth=True
 
-	num_stacks = int(np.log2(imsize)) - 3
-
 	with tf.Session(config=run_config) as sess:
 		dcgan = DCGAN(
 			sess,
@@ -68,7 +66,7 @@ def main(_):
 			batch_size=FLAGS.batch_size,
 			sample_num=FLAGS.sample_num,
 			z_dim=FLAGS.z_dim,
-			gf_dim=FLAGS.gf_dim,
+			# gf_dim=FLAGS.gf_dim,
 			dataset_name=FLAGS.dataset,
 			input_fname_pattern=FLAGS.input_fname_pattern,
 			crop=FLAGS.crop,

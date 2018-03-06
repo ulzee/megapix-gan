@@ -18,7 +18,7 @@ class DCGAN(object):
 				 batch_size=64, sample_num = 64, output_height=64, output_width=64,
 				 y_dim=None, z_dim=100, gf_dim=64, df_dim=64,
 				 gfc_dim=1024, dfc_dim=1024, c_dim=1, dataset_name='default',
-				 input_fname_pattern='*.jpg', checkpoint_dir=None, sample_dir=None, stacks=3):
+				 input_fname_pattern='*.jpg', checkpoint_dir=None, sample_dir=None):
 		"""
 
 		Args:
@@ -34,13 +34,14 @@ class DCGAN(object):
 		"""
 		self.sess = sess
 		self.crop = crop
-		self.stacks = stacks
 
 		self.batch_size = batch_size
 		self.sample_num = sample_num
 
 		self.input_height = input_height
 		self.input_width = input_width
+		self.imsize = input_height
+		self.stacks = np.log2(self.imsize) - 1 # lowest supported imsize=4
 		self.output_height = output_height
 		self.output_width = output_width
 
@@ -320,36 +321,21 @@ class DCGAN(object):
 			if reuse:
 				scope.reuse_variables()
 
-			if not self.y_dim:
-				prevlayer = lrelu(conv2d(image, self.df_dim, name='d_h0_conv'))
-				for ii in range(1, self.stacks + 1):
-					prevlayer = lrelu(self.d_bn[ii](conv2d(prevlayer, self.df_dim*(2**ii), name='d_h%d_conv' % ii)))
-				hf = linear(tf.reshape(prevlayer, [self.batch_size, -1]), 1, 'd_h%d_lin' % (self.stacks + 1))
+			lsize = []
+			for ii in range(self.stacks): # num of layers between image and outlayer
+				lsize.append(2**(self.stacks - ii + 1)) # [8, 4] for imsize=8, stacks=1
 
-				# h0 = lrelu(conv2d(image, self.df_dim, name='d_h0_conv'))
-				# h1 = lrelu(self.d_bn1(conv2d(h0, self.df_dim*2, name='d_h1_conv')))
-				# h2 = lrelu(self.d_bn2(conv2d(h1, self.df_dim*4, name='d_h2_conv')))
-				# h3 = lrelu(self.d_bn3(conv2d(h2, self.df_dim*8, name='d_h3_conv')))
-				# h4 = linear(tf.reshape(h3, [self.batch_size, -1]), 1, 'd_h4_lin')
+			if not self.y_dim:
+				prevlayer = image
+				for ii in range(self.stacks):
+					convop = conv2d(prevlayer, lsize[ii], name='d_h%d_conv' % ii)
+					if ii != 0:
+						# batch normalize all but first layer
+						convop = self.d_bn[ii](convop)
+					prevlayer = lrelu(convop)
+				hf = linear(tf.reshape(prevlayer, [self.batch_size, -1]), 1, 'd_h%d_lin' % self.stacks)
 
 				return tf.nn.sigmoid(hf), hf
-			# else:
-			#   yb = tf.reshape(y, [self.batch_size, 1, 1, self.y_dim])
-			#   x = conv_cond_concat(image, yb)
-
-			#   h0 = lrelu(conv2d(x, self.c_dim + self.y_dim, name='d_h0_conv'))
-			#   h0 = conv_cond_concat(h0, yb)
-
-			#   h1 = lrelu(self.d_bn1(conv2d(h0, self.df_dim + self.y_dim, name='d_h1_conv')))
-			#   h1 = tf.reshape(h1, [self.batch_size, -1])
-			#   h1 = concat([h1, y], 1)
-
-			#   h2 = lrelu(self.d_bn2(linear(h1, self.dfc_dim, 'd_h2_lin')))
-			#   h2 = concat([h2, y], 1)
-
-			#   h3 = linear(h2, 1, 'd_h3_lin')
-
-				# return tf.nn.sigmoid(h3), h3
 
 	def generator(self, z, y=None):
 		with tf.variable_scope("generator") as scope:

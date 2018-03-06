@@ -7,7 +7,7 @@ from utils import pp, visualize, to_json, show_all_variables
 
 import tensorflow as tf
 
-imsize = 32
+imsize = 8
 flags = tf.app.flags
 flags.DEFINE_integer("epoch", 50, "Epoch to train [25]")
 flags.DEFINE_float("learning_rate", 0.0002, "Learning rate of for adam [0.0002]")
@@ -31,13 +31,13 @@ flags.DEFINE_boolean("visualize", False, "True for visualizing, False for nothin
 # flags.DEFINE_integer("generate_test_images", 100, "Number of images to generate during test. [100]")
 # flags.DEFINE_integer("generate_test_images", 10, "Number of images to generate during test. [100]")
 flags.DEFINE_integer("z_dim", 100, "Inner dimension of Z space.")
-flags.DEFINE_integer("gf_dim", 256, "Richness of FC layer over Z")
-flags.DEFINE_integer("stacks", 4, "# of layers between FC over Z and output layer")
+# flags.DEFINE_integer("gf_dim", 256, "Richness of FC layer over Z")
+# flags.DEFINE_integer("stacks", 1, "# of layers between FC over Z and output layer")
 FLAGS = flags.FLAGS
 
 assert int(FLAGS.sample_num**0.5)**2 == FLAGS.sample_num
-assert 2**(FLAGS.stacks+3) > imsize
-assert 2**(FLAGS.stacks+3) < FLAGS.gf_dim
+# assert 2**(FLAGS.stacks+3) > imsize
+# assert 2**(FLAGS.stacks+3) < FLAGS.gf_dim
 
 def main(_):
 	pp.pprint(flags.FLAGS.__flags)
@@ -74,8 +74,7 @@ def main(_):
 			crop=FLAGS.crop,
 			checkpoint_dir=FLAGS.checkpoint_dir,
 			sample_dir=FLAGS.sample_dir,
-			c_dim=1,
-			stacks=num_stacks)
+			c_dim=1)
 
 		show_all_variables()
 

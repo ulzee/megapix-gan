@@ -318,32 +318,22 @@ class DCGAN(object):
 	def generator(self, z, y=None):
 		with tf.variable_scope("generator") as scope:
 			imsize = self.imsize
-			lsize = []
-			ldepth = []
-			for ii in range(self.stacks - 1): # num of layers between image and outlayer
-				lsize.append(2**(ii + 2 + 1)) # [8, 16] for imsize=16, stacks=1
-			#first layer of 4x4 is assumed
 
-			# project `z` and reshape
 			minsize = 4
-			self.z_, self.h0_w, self.h0_b = linear(z, minsize*minsize*1024, 'g_h0_lin', with_w=True)
-			self.h0 = tf.reshape(self.z_, [-1, minsize, minsize, 1024])
+			self.z_, self.h0_w, self.h0_b = linear(z, minsize * minsize * fdepth(0), 'g_h0_lin', with_w=True)
+			self.h0 = tf.reshape(self.z_, [-1, minsize, minsize, fdepth(0)])
 			h0 = tf.nn.relu(self.g_bn[0](self.h0))
 
 			prevlayer = h0
-			for ii in range(self.stacks - 1):
-				nameii = ii + 1
-
-				# last output dim should be 1
-
-				convdim = 1 if ii == self.stacks - 2 else 2 ** (10 - ii - 1)
+			for ii in range(1, self.stacks):
+				outres = 2 ** (ii + 2) # r(1) = 2 ** (1 + 2) = 8
 				hi, _, _ = deconv2d(
 					prevlayer,
-					[self.batch_size, lsize[ii], lsize[ii], convdim],
-					name='g_h%d'%(nameii),
+					[self.batch_size, outres, outres, fdepth(ii) if ii != self.stacks -1 else 1],
+					name='g_h%d'%ii,
 					with_w=True)
-				if ii != self.stacks - 2: # not last, batch norm
-					hi = tf.nn.relu(self.g_bn[nameii](hi))
+				if ii != self.stacks - 1: # not last, batch norm
+					hi = tf.nn.relu(self.g_bn[ii](hi))
 				prevlayer = hi
 
 			return tf.nn.tanh(prevlayer)
@@ -352,31 +342,32 @@ class DCGAN(object):
 		with tf.variable_scope("generator") as scope:
 			scope.reuse_variables()
 
+
 			imsize = self.imsize
-			lsize = []
-			ldepth = []
-			for ii in range(self.stacks - 1): # num of layers between image and outlayer
-				lsize.append(2**(ii + 2 + 1)) # [8, 16] for imsize=16, stacks=1
-			#first layer of 4x4 is assumed
 
 			minsize = 4
-			h0 = tf.reshape(linear(z, minsize*minsize*1024, 'g_h0_lin'),
-					[-1, minsize, minsize, 1024])
-			h0 = tf.nn.relu(self.g_bn[0](h0, train=False))
+			self.z_, self.h0_w, self.h0_b = linear(z, minsize * minsize * fdepth(0), 'g_h0_lin', with_w=True)
+			self.h0 = tf.reshape(self.z_, [-1, minsize, minsize, fdepth(0)])
+			h0 = tf.nn.relu(self.g_bn[0](self.h0, train=False))
 
 			prevlayer = h0
-			for ii in range(self.stacks - 1):
-				nameii = ii + 1
-				# last output dim should be 1
-				convdim = 1 if ii == self.stacks - 2 else 2 ** (10 - ii - 1)
-				hi = deconv2d(
+			for ii in range(1, self.stacks):
+				outres = 2 ** (ii + 2) # r(1) = 2 ** (1 + 2) = 8
+				hi, _, _ = deconv2d(
 					prevlayer,
-					[self.batch_size, lsize[ii], lsize[ii], convdim],
-					name='g_h%d'%(nameii))
-				if ii != self.stacks - 2:
-					hi = tf.nn.relu(self.g_bn[nameii](hi, train=False))
+					[self.batch_size, outres, outres, fdepth(ii) if ii != self.stacks -1 else 1],
+					name='g_h%d'%ii,
+					with_w=True)
+				if ii != self.stacks - 1: # not last, batch norm
+					hi = tf.nn.relu(self.g_bn[ii](hi, train=False))
 				prevlayer = hi
 
+			# imagespace = conv2d(prevlayer,
+			# 	1,
+			# 	k_h=1, k_w=1, d_h=1, d_w=1,
+			# 	name="convout_%dx%d"% (imsize, imsize))
+
+			# return tf.nn.tanh(imagespace)
 			return tf.nn.tanh(prevlayer)
 
 	def load_mnist(self):

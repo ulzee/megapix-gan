@@ -30,7 +30,8 @@ flags.DEFINE_boolean("crop", False, "True for training, False for testing [False
 flags.DEFINE_boolean("visualize", False, "True for visualizing, False for nothing [False]")
 # flags.DEFINE_integer("generate_test_images", 100, "Number of images to generate during test. [100]")
 # flags.DEFINE_integer("generate_test_images", 10, "Number of images to generate during test. [100]")
-flags.DEFINE_integer("z_dim", 100, "Inner dimension of Z space.")
+# flags.DEFINE_integer("z_dim", 100, "Inner dimension of Z space.")
+flags.DEFINE_integer("z_dim", 512, "Inner dimension of Z space.")
 # flags.DEFINE_integer("gf_dim", 256, "Richness of FC layer over Z")
 # flags.DEFINE_integer("stacks", 1, "# of layers between FC over Z and output layer")
 FLAGS = flags.FLAGS

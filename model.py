@@ -16,6 +16,47 @@ def conv_out_size_same(size, stride):
 def fdepth(ii):
 	return 2 ** (10 - ii)
 
+def lerp_clip(a, b, t):
+	return a + (b - a) * tf.clip_by_value(t, 0.0, 1.0)
+
+def get_weight(shape, gain=np.sqrt(2), use_wscale=False, fan_in=None):
+	if fan_in is None: fan_in = np.prod(shape[:-1])
+	std = gain / np.sqrt(fan_in) # He init
+	if use_wscale:
+		wscale = tf.constant(np.float32(std), name='wscale')
+		return tf.get_variable('weight', shape=shape, initializer=tf.initializers.random_normal()) * wscale
+	else:
+		return tf.get_variable('weight', shape=shape, initializer=tf.initializers.random_normal(0, std))
+
+def nvconv2d(x, fmaps, kernel, gain=np.sqrt(2), use_wscale=False):
+	assert kernel >= 1 and kernel % 2 == 1
+	w = get_weight([kernel, kernel, x.shape[1].value, fmaps], gain=gain, use_wscale=use_wscale)
+	w = tf.cast(w, x.dtype)
+	return tf.nn.conv2d(x, w, strides=[1,1,1,1], padding='SAME', data_format='NCHW')
+
+#----------------------------------------------------------------------------
+# Apply bias to the given activation tensor.
+
+def apply_bias(x):
+	b = tf.get_variable('bias', shape=[x.shape[1]], initializer=tf.initializers.zeros())
+	b = tf.cast(b, x.dtype)
+	if len(x.shape) == 2:
+		return x + b
+	else:
+		return tf.nn.bias_add(x, b, data_format='NCHW')
+
+
+# def torgb(x, res): # res = 2..resolution_log2
+def torgb(x): # res = 2..resolution_log2
+	# lod = resolution_log2 - res
+	# with tf.variable_scope('ToRGB_lod%d' % lod):
+	return apply_bias(nvconv2d(x, fmaps=1, kernel=1, gain=1, use_wscale=True))
+
+# def torgb(x, res): # res = 2..resolution_log2
+#         lod = resolution_log2 - res
+#         with tf.variable_scope('ToRGB_lod%d' % lod):
+# 			return apply_bias(conv2d(x, fmaps=num_channels, kernel=1, gain=1, use_wscale=use_wscale))
+
 class DCGAN(object):
 	def __init__(self, sess, input_height=108, input_width=108, crop=True,
 				 batch_size=64, sample_num = 64, output_height=64, output_width=64,
@@ -302,6 +343,7 @@ class DCGAN(object):
 
 
 	def discriminator(self, image, y=None, reuse=False):
+		print('DISCRIM', image.get_shape())
 		with tf.variable_scope("discriminator") as scope:
 			if reuse: scope.reuse_variables()
 
@@ -329,14 +371,22 @@ class DCGAN(object):
 				outres = 2 ** (ii + 2) # r(1) = 2 ** (1 + 2) = 8
 				hi, _, _ = deconv2d(
 					prevlayer,
-					[self.batch_size, outres, outres, fdepth(ii) if ii != self.stacks -1 else 1],
+					[self.batch_size, outres, outres, fdepth(ii)],
 					name='g_h%d'%ii,
 					with_w=True)
-				if ii != self.stacks - 1: # not last, batch norm
-					hi = tf.nn.relu(self.g_bn[ii](hi))
+				# if ii != self.stacks - 1: # not last, batch norm
+				hi = tf.nn.relu(self.g_bn[ii](hi))
 				prevlayer = hi
 
+
+			prevlayer = deconv2d(
+				prevlayer,
+				[self.batch_size, imsize, imsize, 1],
+				k_h=1, k_w=1, d_h=1, d_w=1,
+				name='g_h%d'%self.stacks)
+			# assert prevlayer.dtype == tf.as_dtype('float32')
 			return tf.nn.tanh(prevlayer)
+			# return torgb(prevlayer)
 
 	def sampler(self, z, y=None):
 		with tf.variable_scope("generator") as scope:
@@ -355,20 +405,20 @@ class DCGAN(object):
 				outres = 2 ** (ii + 2) # r(1) = 2 ** (1 + 2) = 8
 				hi, _, _ = deconv2d(
 					prevlayer,
-					[self.batch_size, outres, outres, fdepth(ii) if ii != self.stacks -1 else 1],
+					[self.batch_size, outres, outres, fdepth(ii)],
 					name='g_h%d'%ii,
 					with_w=True)
-				if ii != self.stacks - 1: # not last, batch norm
-					hi = tf.nn.relu(self.g_bn[ii](hi, train=False))
+				# if ii != self.stacks - 1: # not last, batch norm
+				hi = tf.nn.relu(self.g_bn[ii](hi, train=False))
 				prevlayer = hi
 
-			# imagespace = conv2d(prevlayer,
-			# 	1,
-			# 	k_h=1, k_w=1, d_h=1, d_w=1,
-			# 	name="convout_%dx%d"% (imsize, imsize))
-
-			# return tf.nn.tanh(imagespace)
+			prevlayer = deconv2d(
+				prevlayer,
+				[self.batch_size, imsize, imsize, 1],
+				k_h=1, k_w=1, d_h=1, d_w=1,
+				name='g_h%d'%self.stacks)
 			return tf.nn.tanh(prevlayer)
+			# return torgb(prevlayer)
 
 	def load_mnist(self):
 		data_dir = os.path.join("../data", self.dataset_name)

@@ -4,9 +4,9 @@ import time
 import math
 from glob import glob
 import tensorflow as tf
+import tensorflow.contrib.slim as slim
 import numpy as np
 from six.moves import xrange
-
 from ops import *
 from utils import *
 
@@ -62,7 +62,8 @@ class DCGAN(object):
 				 batch_size=64, sample_num = 64, output_height=64, output_width=64,
 				 y_dim=None, z_dim=100, gf_dim=64, df_dim=64,
 				 gfc_dim=1024, dfc_dim=1024, c_dim=1, dataset_name='default',
-				 input_fname_pattern='*.jpg', checkpoint_dir=None, sample_dir=None):
+				 input_fname_pattern='*.jpg', checkpoint_dir=None, sample_dir=None,
+				 grow=8):
 		"""
 
 		Args:
@@ -81,6 +82,7 @@ class DCGAN(object):
 
 		self.batch_size = batch_size
 		self.sample_num = sample_num
+		self.grow = grow
 
 		self.imsize = input_height
 		self.stacks = int(np.log2(self.imsize)) - 1 # lowest supported imsize=4
@@ -173,7 +175,38 @@ class DCGAN(object):
 		self.d_vars = [var for var in t_vars if 'd_' in var.name]
 		self.g_vars = [var for var in t_vars if 'g_' in var.name]
 
-		self.saver = tf.train.Saver()
+
+		if self.grow is not None:
+			current_vars = slim.get_variables_to_restore()
+			prev_vars = []
+			ignored_vars = []
+			for var in current_vars:
+				if '_h' in str(var):
+					parts = str(var).split('/')[1]
+					parts = parts.split('_')[1]
+					hvar = int(parts.replace('h', ''))
+					if 2**hvar >= self.grow:
+						ignored_vars.append(var)
+						continue
+				elif '_b' in str(var):
+					parts = str(var).split('/')[1]
+					parts = parts.split('_')[1]
+					hvar = int(parts.replace('bn', ''))
+					if 2**(hvar + 1) >= self.grow:
+						ignored_vars.append(var)
+						continue
+				prev_vars.append(var)
+
+			try:
+				print('These nodes will be ignored:')
+				for var in ignored_vars:
+					print(var)
+				input()
+			except:
+				pass
+			self.saver = tf.train.Saver(prev_vars)
+		else:
+			self.saver = tf.train.Saver()
 
 	def train(self, config):
 		d_optim = tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1) \
@@ -459,11 +492,21 @@ class DCGAN(object):
 
 	@property
 	def model_dir(self):
+		# return "{}_{}_{}_{}".format(
+		# 		self.dataset_name, self.batch_size,
+		# 		self.output_height, self.output_width)
+
+		if self.grow is not None:
+			return "{}_{}_{}_{}".format(
+				'tissue%d/default'%self.grow, self.batch_size,
+				self.grow, self.grow)
+
 		return "{}_{}_{}_{}".format(
 				self.dataset_name, self.batch_size,
 				self.output_height, self.output_width)
 
 	def save(self, checkpoint_dir, step):
+		print(' [!] Saving model: %d' % step)
 		model_name = "DCGAN.model"
 		checkpoint_dir = os.path.join(checkpoint_dir, self.model_dir)
 
@@ -482,7 +525,9 @@ class DCGAN(object):
 		ckpt = tf.train.get_checkpoint_state(checkpoint_dir)
 		if ckpt and ckpt.model_checkpoint_path:
 			ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
-			self.saver.restore(self.sess, os.path.join(checkpoint_dir, ckpt_name))
+
+			restore_path = os.path.join(checkpoint_dir, ckpt_name)
+			self.saver.restore(self.sess, restore_path)
 			counter = int(next(re.finditer("(\d+)(?!.*\d)",ckpt_name)).group(0))
 			print(" [*] Success to read {}".format(ckpt_name))
 			return True, counter

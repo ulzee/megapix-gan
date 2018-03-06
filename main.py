@@ -7,7 +7,8 @@ from utils import pp, visualize, to_json, show_all_variables
 
 import tensorflow as tf
 
-imsize = 8
+imsize = 16
+# imsize = 8
 flags = tf.app.flags
 flags.DEFINE_integer("epoch", 50, "Epoch to train [25]")
 flags.DEFINE_float("learning_rate", 0.0002, "Learning rate of for adam [0.0002]")
@@ -28,6 +29,8 @@ flags.DEFINE_integer("sample_num", 64, "Number of images to preview as sample")
 flags.DEFINE_boolean("train", True, "True for training, False for testing [False]")
 flags.DEFINE_boolean("crop", False, "True for training, False for testing [False]")
 flags.DEFINE_boolean("visualize", False, "True for visualizing, False for nothing [False]")
+flags.DEFINE_boolean("grow", int(imsize/2), "Grow on top of a previous NxN model.")
+# flags.DEFINE_boolean("grow", None, "Grow on top of a previous NxN model.")
 # flags.DEFINE_integer("generate_test_images", 100, "Number of images to generate during test. [100]")
 # flags.DEFINE_integer("generate_test_images", 10, "Number of images to generate during test. [100]")
 # flags.DEFINE_integer("z_dim", 100, "Inner dimension of Z space.")
@@ -73,7 +76,8 @@ def main(_):
 			crop=FLAGS.crop,
 			checkpoint_dir=FLAGS.checkpoint_dir,
 			sample_dir=FLAGS.sample_dir,
-			c_dim=1)
+			c_dim=1,
+			grow=FLAGS.grow)
 
 		show_all_variables()
 

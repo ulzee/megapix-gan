@@ -131,6 +131,12 @@ class DCGAN(object):
 		self.build_model()
 
 	def build_model(self):
+
+		lerp_size = (1.0 / 161.0 / 32.0 * 2.0)
+		lerp_factor = tf.Variable(0.0, name='lerp_factor', trainable=False, dtype=tf.float32)
+		lerp_op = tf.assign(lerp_factor, lerp_factor + lerp_size)
+		self.clip_lerp = tf.assign(lerp_factor, tf.minimum(lerp_op, 1.0))
+
 		if self.y_dim:
 			self.y = tf.placeholder(tf.float32, [self.batch_size, self.y_dim], name='y')
 		else:
@@ -202,6 +208,9 @@ class DCGAN(object):
 					if 2**(hvar + 1) >= self.grow:
 						ignored_vars.append(var)
 						continue
+				if 'lerp_factor' in str(var):
+					ignored_vars.append(var)
+					continue
 				prev_vars.append(var)
 			self.load_vars = prev_vars
 
@@ -346,6 +355,9 @@ class DCGAN(object):
 					_, summary_str = self.sess.run([g_optim, self.g_sum],
 						feed_dict={ self.z: batch_z })
 					self.writer.add_summary(summary_str, counter)
+
+					lerp_val = self.sess.run(self.clip_lerp)
+					print('LERP', lerp_val)
 
 					errD_fake = self.d_loss_fake.eval({ self.z: batch_z })
 					errD_real = self.d_loss_real.eval({ self.inputs: batch_images })

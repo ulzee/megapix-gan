@@ -14,7 +14,7 @@ def conv_out_size_same(size, stride):
 	return int(math.ceil(float(size) / float(stride)))
 
 def fdepth(ii):
-	return 2 ** (10 - ii)
+	return 2 ** (11 - ii)
 
 def lerp_clip(a, b, t):
 	return a + (b - a) * tf.clip_by_value(t, 0.0, 1.0)
@@ -411,10 +411,11 @@ class DCGAN(object):
 			if reuse: scope.reuse_variables()
 
 			print('IMSIZE', image.get_shape())
-			image_layer = conv2d(image, fdepth(self.stacks), name='d_image') # first layer
+			# FIXME: what should be the DIM of the superficial layer?
+			image_layer = conv2d(image, fdepth(self.stacks), d_h=1, d_w=1, name='d_image') # first layer
 			print('DIMF', image_layer.get_shape())
 			prevlayer = image_layer
-			for ii in range(self.stacks - 1, 0, -1): # Other (self.stacks - 1) layers
+			for ii in range(self.stacks, 0, -1): # Other (self.stacks - 1) layers
 				convdim = fdepth(ii)
 				convop = conv2d(prevlayer, convdim, name='d_h%d_conv' % ii)
 				print('DIM%d' % ii, convop.get_shape())

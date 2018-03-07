@@ -8,8 +8,8 @@ from utils import pp, visualize, to_json, show_all_variables
 import tensorflow as tf
 
 # imsize = 32
-# imsize = 16
-imsize = 8
+imsize = 16
+# imsize = 8
 flags = tf.app.flags
 flags.DEFINE_integer("epoch", 10, "Epoch to train [25]")
 flags.DEFINE_float("learning_rate", 0.0002, "Learning rate of for adam [0.0002]")

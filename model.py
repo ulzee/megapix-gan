@@ -215,6 +215,9 @@ class DCGAN(object):
 				if 'g_image_%d' % self.stacks in str(var):
 					ignored_vars.append(var)
 					continue
+				if 'd_image' in str(var):
+					ignored_vars.append(var)
+					continue
 				prev_vars.append(var)
 			self.load_vars = prev_vars
 
@@ -361,7 +364,8 @@ class DCGAN(object):
 					self.writer.add_summary(summary_str, counter)
 
 					lerp_val = self.sess.run(self.clip_lerp)
-					print('LERP:', lerp_val)
+					if self.grow is not None:
+						print('LERP:', lerp_val)
 
 					errD_fake = self.d_loss_fake.eval({ self.z: batch_z })
 					errD_real = self.d_loss_real.eval({ self.inputs: batch_images })
@@ -403,19 +407,23 @@ class DCGAN(object):
 
 
 	def discriminator(self, image, y=None, reuse=False):
-		print('DISCRIM', image.get_shape())
 		with tf.variable_scope("discriminator") as scope:
 			if reuse: scope.reuse_variables()
 
-			prevlayer = conv2d(image, fdepth(0), name='d_h%d_conv' % 0) # first layer
-			print('DISC1SIZE', prevlayer.get_shape())
-			input()
-			for ii in range(1, self.stacks): # Other (self.stacks - 1) layers
+			print('IMSIZE', image.get_shape())
+			image_layer = conv2d(image, fdepth(self.stacks), name='d_image') # first layer
+			print('DIMF', image_layer.get_shape())
+			prevlayer = image_layer
+			for ii in range(self.stacks - 1, 0, -1): # Other (self.stacks - 1) layers
 				convdim = fdepth(ii)
 				convop = conv2d(prevlayer, convdim, name='d_h%d_conv' % ii)
+				print('DIM%d' % ii, convop.get_shape())
 				convop = self.d_bn[ii](convop)
 				prevlayer = lrelu(convop)
-			hf = linear(tf.reshape(prevlayer, [self.batch_size, -1]), 1, 'd_h%d_lin' % self.stacks)
+			hf = linear(tf.reshape(prevlayer, [self.batch_size, -1]), 1, 'd_h0_lin')
+			print('DIM0', hf.get_shape())
+
+			# input()
 
 			return tf.nn.sigmoid(hf), hf
 

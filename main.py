@@ -11,7 +11,7 @@ import tensorflow as tf
 imsize = 16
 # imsize = 8
 flags = tf.app.flags
-flags.DEFINE_integer("epoch", 32, "Epoch to train [25]")
+flags.DEFINE_integer("epoch", 2, "Epoch to train [25]")
 flags.DEFINE_float("learning_rate", 0.0002, "Learning rate of for adam [0.0002]")
 flags.DEFINE_float("beta1", 0.5, "Momentum term of adam [0.5]")
 flags.DEFINE_integer("train_size", np.inf, "The size of train images [np.inf]")

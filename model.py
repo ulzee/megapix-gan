@@ -125,6 +125,7 @@ class DCGAN(object):
 		print('SAVE DIR:', self.model_dir)
 		print('LOAD DIR:', self.model_growcond_dir)
 		try:
+			print('Press enter to confirm and train:')
 			input()
 		except:
 			pass
@@ -209,6 +210,9 @@ class DCGAN(object):
 						ignored_vars.append(var)
 						continue
 				if 'lerp_factor' in str(var):
+					ignored_vars.append(var)
+					continue
+				if 'g_image_%d' % self.stacks in str(var):
 					ignored_vars.append(var)
 					continue
 				prev_vars.append(var)
@@ -357,7 +361,7 @@ class DCGAN(object):
 					self.writer.add_summary(summary_str, counter)
 
 					lerp_val = self.sess.run(self.clip_lerp)
-					print('LERP', lerp_val)
+					print('LERP:', lerp_val)
 
 					errD_fake = self.d_loss_fake.eval({ self.z: batch_z })
 					errD_real = self.d_loss_real.eval({ self.inputs: batch_images })
@@ -404,6 +408,8 @@ class DCGAN(object):
 			if reuse: scope.reuse_variables()
 
 			prevlayer = conv2d(image, fdepth(0), name='d_h%d_conv' % 0) # first layer
+			print('DISC1SIZE', prevlayer.get_shape())
+			input()
 			for ii in range(1, self.stacks): # Other (self.stacks - 1) layers
 				convdim = fdepth(ii)
 				convop = conv2d(prevlayer, convdim, name='d_h%d_conv' % ii)
@@ -430,24 +436,38 @@ class DCGAN(object):
 					[self.batch_size, outres, outres, fdepth(ii)],
 					name='g_h%d'%ii,
 					with_w=True)
-				# if ii != self.stacks - 1: # not last, batch norm
+				if ii == self.stacks - 2: # keep 2nd to last layer
+					lerplayer = hi
 				hi = tf.nn.relu(self.g_bn[ii](hi))
 				prevlayer = hi
 
-
-			prevlayer = deconv2d(
+			g_image = tf.nn.tanh(deconv2d(
 				prevlayer,
 				[self.batch_size, imsize, imsize, 1],
 				k_h=1, k_w=1, d_h=1, d_w=1,
-				name='g_h%d'%self.stacks)
-			# assert prevlayer.dtype == tf.as_dtype('float32')
-			return tf.nn.tanh(prevlayer)
-			# return torgb(prevlayer)
+				name='g_image_%d' % self.stacks))
+
+			# 8 is the min supported, no lerping...
+			if imsize == 8:
+				return g_image
+
+			prevsize = int(imsize / 2)
+			g_image_lerp = tf.nn.tanh(deconv2d(
+				lerplayer,
+				[self.batch_size, prevsize, prevsize, 1],
+				k_h=1, k_w=1, d_h=1, d_w=1,
+				name='g_image_%d' % (self.stacks - 1)))
+
+			resized_images = tf.image.resize_images(g_image_lerp, [imsize, imsize])
+			lerp_output = (self.clip_lerp * g_image) + ((1 - self.clip_lerp) * resized_images)
+			print('LERP SHAPE', lerp_output.get_shape())
+			# input()
+
+			return lerp_output
 
 	def sampler(self, z, y=None):
 		with tf.variable_scope("generator") as scope:
 			scope.reuse_variables()
-
 
 			imsize = self.imsize
 
@@ -472,7 +492,7 @@ class DCGAN(object):
 				prevlayer,
 				[self.batch_size, imsize, imsize, 1],
 				k_h=1, k_w=1, d_h=1, d_w=1,
-				name='g_h%d'%self.stacks)
+				name='g_image_%d' % self.stacks)
 			return tf.nn.tanh(prevlayer)
 			# return torgb(prevlayer)
 

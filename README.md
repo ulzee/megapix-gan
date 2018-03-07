@@ -1,4 +1,4 @@
-# Megapixel Resolution
+# Megapixel Resolution Training
 
 As described by:
 
@@ -8,6 +8,15 @@ Adapted from initial DCGAN code:
 
 https://github.com/carpedm20/DCGAN-tensorflow
 
+
+Structure of GAN can be varied from 8x8 to 512x512 and onwards. Everything above 8x8 will try to load a model trained on the previous resolution.
+
+```python
+python main.py 8
+python main.py 16
+...
+python main.py 512
+```
 
 [========== Original README ==========]
 

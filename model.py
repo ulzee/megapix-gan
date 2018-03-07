@@ -121,6 +121,13 @@ class DCGAN(object):
 			self.c_dim = 1
 
 		self.grayscale = (self.c_dim == 1)
+
+		print('SAVE DIR:', self.model_dir)
+		print('LOAD DIR:', self.model_growcond_dir)
+		try:
+			input()
+		except:
+			pass
 		self.build_model()
 
 	def build_model(self):
@@ -196,20 +203,21 @@ class DCGAN(object):
 						ignored_vars.append(var)
 						continue
 				prev_vars.append(var)
+			self.load_vars = prev_vars
 
-			try:
-				print('These nodes will be ignored:')
-				for var in ignored_vars:
-					print('    ', var.name)
-				print('These nodes will be loaded:')
-				for var in prev_vars:
-					print('    ', var.name)
-				input()
-			except:
-				pass
-			self.saver = tf.train.Saver(prev_vars)
-		else:
-			self.saver = tf.train.Saver()
+			print('These nodes will be ignored:')
+			for var in ignored_vars:
+				print('    ', var.name)
+			print('These nodes will be loaded:')
+			for var in prev_vars:
+				print('    ', var.name)
+			# try:
+			# 	input()
+			# except:
+			# 	pass
+		# 	self.saver = tf.train.Saver(prev_vars)
+		# else:
+		# 	self.saver = tf.train.Saver()
 
 	def train(self, config):
 		d_optim = tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1) \
@@ -494,15 +502,23 @@ class DCGAN(object):
 		return X/255.,y_vec
 
 	@property
-	def model_dir(self):
+	def model_growcond_dir(self):
 		if self.grow is not None:
-			return "{}_{}_{}_{}".format(
+			path = "{}_{}_{}_{}".format(
 				'tissue%d/default'%self.grow, self.batch_size,
 				self.grow, self.grow)
+		else:
+			path = "{}_{}_{}_{}".format(
+					self.dataset_name, self.batch_size,
+					self.output_height, self.output_width)
+		return path
 
-		return "{}_{}_{}_{}".format(
+	@property
+	def model_dir(self):
+		path = "{}_{}_{}_{}".format(
 				self.dataset_name, self.batch_size,
 				self.output_height, self.output_width)
+		return path
 
 	def save(self, checkpoint_dir, step):
 		print(' [!] Saving model: %d' % step)
@@ -512,21 +528,25 @@ class DCGAN(object):
 		if not os.path.exists(checkpoint_dir):
 			os.makedirs(checkpoint_dir)
 
-		self.saver.save(self.sess,
+		tf.train.Saver().save(self.sess,
 						os.path.join(checkpoint_dir, model_name),
 						global_step=step)
 
 	def load(self, checkpoint_dir):
 		import re
 		print(" [*] Reading checkpoints...")
-		checkpoint_dir = os.path.join(checkpoint_dir, self.model_dir)
+		checkpoint_dir = os.path.join(checkpoint_dir, self.model_growcond_dir)
 
 		ckpt = tf.train.get_checkpoint_state(checkpoint_dir)
 		if ckpt and ckpt.model_checkpoint_path:
 			ckpt_name = os.path.basename(ckpt.model_checkpoint_path)
 
 			restore_path = os.path.join(checkpoint_dir, ckpt_name)
-			self.saver.restore(self.sess, restore_path)
+			if self.grow is not None:
+				tf.train.Saver(self.load_vars).restore(self.sess, restore_path)
+			else:
+				tf.train.Saver().restore(self.sess, restore_path)
+			# self.saver
 			counter = int(next(re.finditer("(\d+)(?!.*\d)",ckpt_name)).group(0))
 			print(" [*] Success to read {}".format(ckpt_name))
 			return True, counter

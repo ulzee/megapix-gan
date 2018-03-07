@@ -185,7 +185,7 @@ class DCGAN(object):
 					parts = str(var).split('/')[1]
 					parts = parts.split('_')[1]
 					hvar = int(parts.replace('h', ''))
-					if 2**hvar >= self.grow:
+					if 2**(hvar + 1) >= self.grow:
 						ignored_vars.append(var)
 						continue
 				elif '_b' in str(var):
@@ -200,7 +200,10 @@ class DCGAN(object):
 			try:
 				print('These nodes will be ignored:')
 				for var in ignored_vars:
-					print(var)
+					print('    ', var.name)
+				print('These nodes will be loaded:')
+				for var in prev_vars:
+					print('    ', var.name)
 				input()
 			except:
 				pass
@@ -222,7 +225,7 @@ class DCGAN(object):
 			self.G_sum, self.d_loss_fake_sum, self.g_loss_sum])
 		self.d_sum = merge_summary(
 				[self.z_sum, self.d_sum, self.d_loss_real_sum, self.d_loss_sum])
-		self.writer = SummaryWriter("./logs", self.sess.graph)
+		self.writer = SummaryWriter("./logs/tissue%d" % self.imsize, self.sess.graph)
 
 		# Sample from the random Z distribuion
 		sample_z = np.random.uniform(-1, 1, size=(self.sample_num , self.z_dim))
@@ -492,10 +495,6 @@ class DCGAN(object):
 
 	@property
 	def model_dir(self):
-		# return "{}_{}_{}_{}".format(
-		# 		self.dataset_name, self.batch_size,
-		# 		self.output_height, self.output_width)
-
 		if self.grow is not None:
 			return "{}_{}_{}_{}".format(
 				'tissue%d/default'%self.grow, self.batch_size,

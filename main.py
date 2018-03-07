@@ -7,10 +7,10 @@ from utils import pp, visualize, to_json, show_all_variables
 
 import tensorflow as tf
 
-imsize = 16
-# imsize = 8
+# imsize = 16
+imsize = 8
 flags = tf.app.flags
-flags.DEFINE_integer("epoch", 50, "Epoch to train [25]")
+flags.DEFINE_integer("epoch", 32, "Epoch to train [25]")
 flags.DEFINE_float("learning_rate", 0.0002, "Learning rate of for adam [0.0002]")
 flags.DEFINE_float("beta1", 0.5, "Momentum term of adam [0.5]")
 flags.DEFINE_integer("train_size", np.inf, "The size of train images [np.inf]")
@@ -29,7 +29,7 @@ flags.DEFINE_integer("sample_num", 64, "Number of images to preview as sample")
 flags.DEFINE_boolean("train", True, "True for training, False for testing [False]")
 flags.DEFINE_boolean("crop", False, "True for training, False for testing [False]")
 flags.DEFINE_boolean("visualize", False, "True for visualizing, False for nothing [False]")
-flags.DEFINE_boolean("grow", int(imsize/2), "Grow on top of a previous NxN model.")
+flags.DEFINE_boolean("grow", int(imsize/2) if imsize != 8 else None, "Grow on top of a previous NxN model.")
 # flags.DEFINE_boolean("grow", None, "Grow on top of a previous NxN model.")
 # flags.DEFINE_integer("generate_test_images", 100, "Number of images to generate during test. [100]")
 # flags.DEFINE_integer("generate_test_images", 10, "Number of images to generate during test. [100]")
@@ -95,8 +95,8 @@ def main(_):
 		#                 [dcgan.h4_w, dcgan.h4_b, None])
 
 		# Below is codes for visualization
-		OPTION = 1
-		visualize(sess, dcgan, FLAGS, OPTION)
+		# OPTION = 1
+		# visualize(sess, dcgan, FLAGS, OPTION)
 
 if __name__ == '__main__':
 	tf.app.run()

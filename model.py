@@ -14,7 +14,7 @@ def conv_out_size_same(size, stride):
 	return int(math.ceil(float(size) / float(stride)))
 
 def fdepth(ii):
-	return 2 ** (11 - ii)
+	return 2 ** (11 - int(np.floor(ii / 2)))
 
 def lerp_clip(a, b, t):
 	return a + (b - a) * tf.clip_by_value(t, 0.0, 1.0)
@@ -125,7 +125,7 @@ class DCGAN(object):
 		print('SAVE DIR:', self.model_dir)
 		print('LOAD DIR:', self.model_growcond_dir)
 		try:
-			print('Press enter to confirm and train:')
+			print('Press enter to confirm paths:')
 			input()
 		except:
 			pass
@@ -133,8 +133,8 @@ class DCGAN(object):
 
 	def build_model(self):
 
-		lerp_size = (1.0 / 161.0 / 32.0 * 2.0)
-		lerp_factor = tf.Variable(0.0, name='lerp_factor', trainable=False, dtype=tf.float32)
+		lerp_size = (1.0 / 161.0 / 32.0)
+		lerp_factor = tf.Variable(0.333, name='lerp_factor', trainable=False, dtype=tf.float32)
 		lerp_op = tf.assign(lerp_factor, lerp_factor + lerp_size)
 		self.clip_lerp = tf.assign(lerp_factor, tf.minimum(lerp_op, 1.0))
 
@@ -157,6 +157,12 @@ class DCGAN(object):
 		self.D, self.D_logits   = self.discriminator(self.inputs, self.y, reuse=False)
 		self.sampler            = self.sampler(self.z, self.y)
 		self.D_, self.D_logits_ = self.discriminator(self.G, self.y, reuse=True)
+
+		try:
+			print('Defined G and D:')
+			input()
+		except:
+			pass
 
 		# Loss calculations
 		self.d_sum = histogram_summary("d", self.D)
@@ -199,14 +205,14 @@ class DCGAN(object):
 					parts = str(var).split('/')[1]
 					parts = parts.split('_')[1]
 					hvar = int(parts.replace('h', ''))
-					if 2**(hvar + 1) >= self.grow:
+					if 2**(hvar + 1) > self.grow:
 						ignored_vars.append(var)
 						continue
 				elif '_b' in str(var):
 					parts = str(var).split('/')[1]
 					parts = parts.split('_')[1]
 					hvar = int(parts.replace('bn', ''))
-					if 2**(hvar + 1) >= self.grow:
+					if 2**(hvar + 1) > self.grow:
 						ignored_vars.append(var)
 						continue
 				if 'lerp_factor' in str(var):
@@ -223,17 +229,16 @@ class DCGAN(object):
 
 			print('These nodes will be ignored:')
 			for var in ignored_vars:
-				print('    ', var.name)
+				print('   *', var.name)
 			print('These nodes will be loaded:')
 			for var in prev_vars:
-				print('    ', var.name)
-			# try:
-			# 	input()
-			# except:
-			# 	pass
-		# 	self.saver = tf.train.Saver(prev_vars)
-		# else:
-		# 	self.saver = tf.train.Saver()
+				print('   *', var.name)
+
+			try:
+				print('Press enter to confirm vars:')
+				input()
+			except:
+				pass
 
 	def train(self, config):
 		d_optim = tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1) \
@@ -412,12 +417,19 @@ class DCGAN(object):
 
 			print('IMSIZE', image.get_shape())
 			# FIXME: what should be the DIM of the superficial layer?
-			image_layer = conv2d(image, fdepth(self.stacks), d_h=1, d_w=1, name='d_image') # first layer
+			image_layer = conv2d(image, fdepth(self.stacks + 1), k_h=3, k_w=3, d_h=1, d_w=1, name='d_image') # first layer
 			print('DIMF', image_layer.get_shape())
 			prevlayer = image_layer
+
+			# prevlayer = image
 			for ii in range(self.stacks, 0, -1): # Other (self.stacks - 1) layers
+				stride = 1 if ii == self.stacks else 2
 				convdim = fdepth(ii)
-				convop = conv2d(prevlayer, convdim, name='d_h%d_conv' % ii)
+				convop = conv2d(
+					prevlayer,
+					convdim,
+					d_h=stride, d_w=stride,
+					name='d_h%d_conv' % ii)
 				print('DIM%d' % ii, convop.get_shape())
 				convop = self.d_bn[ii](convop)
 				prevlayer = lrelu(convop)
@@ -433,19 +445,26 @@ class DCGAN(object):
 			imsize = self.imsize
 
 			minsize = 4
-			self.z_, self.h0_w, self.h0_b = linear(z, minsize * minsize * fdepth(0), 'g_h0_lin', with_w=True)
+			self.z_, self.h0_w, self.h0_b = linear(z, minsize * minsize * fdepth(0), 'g_zfc0_lin', with_w=True)
 			self.h0 = tf.reshape(self.z_, [-1, minsize, minsize, fdepth(0)])
+			print('GEN0', self.h0.get_shape())
 			h0 = tf.nn.relu(self.g_bn[0](self.h0))
 
 			prevlayer = h0
-			for ii in range(1, self.stacks):
-				outres = 2 ** (ii + 2) # r(1) = 2 ** (1 + 2) = 8
+			for ii in range(1, self.stacks + 1):
+				# outres(0) = 2 ** (0 + 2) = 4
+				# outres(1) = 2 ** (1 + 2) = 8
+				outres = 2 ** (ii + 1)
+				stride = 1 if ii == 1 else 2
 				hi, _, _ = deconv2d(
 					prevlayer,
 					[self.batch_size, outres, outres, fdepth(ii)],
-					name='g_h%d'%ii,
+					d_h=stride, d_w=stride,
+					name='g_h%d'%(ii),
 					with_w=True)
-				if ii == self.stacks - 2: # keep 2nd to last layer
+				print('GEN%d' % ii, hi.get_shape())
+				if imsize is not 8 and ii == self.stacks + 1 - 2:
+					# keep 2nd to last layer
 					lerplayer = hi
 				hi = tf.nn.relu(self.g_bn[ii](hi))
 				prevlayer = hi
@@ -455,6 +474,7 @@ class DCGAN(object):
 				[self.batch_size, imsize, imsize, 1],
 				k_h=1, k_w=1, d_h=1, d_w=1,
 				name='g_image_%d' % self.stacks))
+			print('GENF', g_image.get_shape())
 
 			# 8 is the min supported, no lerping...
 			if imsize == 8:
@@ -467,7 +487,8 @@ class DCGAN(object):
 				k_h=1, k_w=1, d_h=1, d_w=1,
 				name='g_image_%d' % (self.stacks - 1)))
 
-			resized_images = tf.image.resize_images(g_image_lerp, [imsize, imsize])
+			resized_images = tf.image.resize_images(g_image_lerp, [imsize, imsize],
+				method=tf.image.ResizeMethod.BICUBIC)
 			lerp_output = (self.clip_lerp * g_image) + ((1 - self.clip_lerp) * resized_images)
 			print('LERP SHAPE', lerp_output.get_shape())
 			# input()
@@ -481,29 +502,46 @@ class DCGAN(object):
 			imsize = self.imsize
 
 			minsize = 4
-			self.z_, self.h0_w, self.h0_b = linear(z, minsize * minsize * fdepth(0), 'g_h0_lin', with_w=True)
+			self.z_, self.h0_w, self.h0_b = linear(z, minsize * minsize * fdepth(0), 'g_zfc0_lin', with_w=True)
 			self.h0 = tf.reshape(self.z_, [-1, minsize, minsize, fdepth(0)])
 			h0 = tf.nn.relu(self.g_bn[0](self.h0, train=False))
 
 			prevlayer = h0
-			for ii in range(1, self.stacks):
-				outres = 2 ** (ii + 2) # r(1) = 2 ** (1 + 2) = 8
-				hi, _, _ = deconv2d(
+			for ii in range(1, self.stacks + 1):
+				outres = 2 ** (ii + 1) # r(1) = 2 ** (1 + 2) = 8
+				stride = 1 if ii == 1 else 2
+				hi = deconv2d(
 					prevlayer,
 					[self.batch_size, outres, outres, fdepth(ii)],
-					name='g_h%d'%ii,
-					with_w=True)
-				# if ii != self.stacks - 1: # not last, batch norm
+					d_h=stride, d_w=stride,
+					name='g_h%d'%(ii))
+				if imsize is not 8 and ii == self.stacks + 1 - 2:
+					# keep 2nd to last layer
+					lerplayer = hi
 				hi = tf.nn.relu(self.g_bn[ii](hi, train=False))
 				prevlayer = hi
 
-			prevlayer = deconv2d(
+			g_image = tf.nn.tanh(deconv2d(
 				prevlayer,
 				[self.batch_size, imsize, imsize, 1],
 				k_h=1, k_w=1, d_h=1, d_w=1,
-				name='g_image_%d' % self.stacks)
-			return tf.nn.tanh(prevlayer)
-			# return torgb(prevlayer)
+				name='g_image_%d' % self.stacks))
+
+			if imsize == 8:
+				return g_image
+
+			prevsize = int(imsize / 2)
+			g_image_lerp = tf.nn.tanh(deconv2d(
+				lerplayer,
+				[self.batch_size, prevsize, prevsize, 1],
+				k_h=1, k_w=1, d_h=1, d_w=1,
+				name='g_image_%d' % (self.stacks - 1)))
+
+			resized_images = tf.image.resize_images(g_image_lerp, [imsize, imsize],
+				method=tf.image.ResizeMethod.BICUBIC)
+			lerp_output = (self.clip_lerp * g_image) + ((1 - self.clip_lerp) * resized_images)
+
+			return lerp_output
 
 	def load_mnist(self):
 		data_dir = os.path.join("../data", self.dataset_name)
